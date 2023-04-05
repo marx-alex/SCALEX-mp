@@ -2,19 +2,19 @@ SCALEX-mp
 ==============================
 
 SCALEX is a Variational Autoencoder for the integration of single cell data from different batches.
-It was originally designed for single cell sequencing data. SCALEX-md is an adaption
+It was originally designed for single cell sequencing data. SCALEX-mp is an adaption
 for morphological (image-based) profiles. Pytorch Lightning and Weights and Biases for 
 logging is used under the hood.
 
 ## Installation
 Install the latest version from GitHub:
 
-    pip install git+https://github.com/marx-alex/SCALEX-md.git
+    pip install git+https://github.com/marx-alex/SCALEX-mp.git
 
 Or git clone and install:
 
-    git clone git://github.com/marx-alex/SCALEX-md.git
-    cd SCALEX-md
+    git clone git://github.com/marx-alex/SCALEX-mp.git
+    cd SCALEX-mp
     python setup.py install
 
 ## Usage
