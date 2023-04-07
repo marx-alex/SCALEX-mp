@@ -6,16 +6,18 @@ It was originally designed for single cell sequencing data. SCALEX-mp is an adap
 for morphological (image-based) profiles. Pytorch Lightning and Weights and Biases for 
 logging is used under the hood.
 
+The main difference to the published SCALEX model is that the last decoder layer uses 
+an identity transform as activation, because in contrast to count data morphological 
+profiles are expected to be gaussian distributed.
+Mean squared error is therefore used as reconstruction loss. The size and number of
+hidden layers can be individually adapted.
+
 ## Installation
 Install the latest version from GitHub:
 
-    pip install git+https://github.com/marx-alex/SCALEX-mp.git
-
-Or git clone and install:
-
     git clone git://github.com/marx-alex/SCALEX-mp.git
     cd SCALEX-mp
-    python setup.py install
+    pip install -r requirements.txt
 
 ## Usage
 
@@ -32,8 +34,8 @@ logic = SCALEXLogic(
     adata=adata,
     batch_key='batch',              # name of observation
     latent_dim=10,                  # number of dimensions of the latent space
-    encoder_layer_dims=[512, 256],  # dimensions of the hidden layer in the encoder
-    decoder_layer_dims=[256, 512],  # dimensions of the hidden layer in the decoder
+    encoder_layer_dims=[512, 256],  # dimensions of the hidden layers in the encoder
+    decoder_layer_dims=[256, 512],  # dimensions of the hidden layers in the decoder
     kld_beta=0.001,                 # coefficient of the KLD loss
     dropout=0.1,                    # dropout rate
     l2=1e-4,                        # l2 regularization
