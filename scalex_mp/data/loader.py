@@ -1,9 +1,9 @@
-from typing import Union, Optional
+from typing import Union
 
+import numpy as np
 import anndata as ad
 import pytorch_lightning as pl
-from anndata.experimental import AnnLoader
-from scalex_mp.data import AnnDataCollator
+from torch.utils.data import Dataset, DataLoader
 
 
 class AnnDataModule(pl.LightningDataModule):
@@ -12,67 +12,76 @@ class AnnDataModule(pl.LightningDataModule):
     Parameters
     ----------
     adata : anndata.AnnData or str
-        Path to anndata object or anndata object
+        Path to AnnData object or AnnData object
     batch_key : str, optional
         Batch variable
     batch_size : int
         Size of mini batches
     num_workers : int
         Number of subprocesses
-    train_dataloader_opts : dict, optional
-        Additional arguments for training dataloader
-    test_dataloader_opts : dict, optional
-        Additional arguments for testing dataloader
     """
 
     def __init__(
         self,
         adata: Union[str, ad.AnnData],
         batch_key: str = "batch",
-        batch_size: int = 32,
-        num_workers: int = 0,
-        train_dataloader_opts: Optional[dict] = None,
-        test_dataloader_opts: Optional[dict] = None,
+        batch_size: int = 64,
+        num_workers: int = 0
     ):
         super().__init__()
 
         self.batch_size = batch_size
         self.num_workers = num_workers
-        if isinstance(adata, str):
-            self.adata = ad.read_h5ad(adata)
-        else:
-            self.adata = adata
-        # convert string obs to categories
-        self.adata.strings_to_categoricals()
         self.n_features = adata.n_vars
         self.n_batches = len(adata.obs[batch_key].unique())
 
-        # collator
-        collator = AnnDataCollator(batch_key=batch_key)
+        # dataset
+        if isinstance(adata, str):
+            adata = ad.read_h5ad(adata)
+        self.dataset = AnnDataset(adata, batch_key=batch_key)
 
-        # defining options for data loaders
-        self.train_dataloader_opts = {
-            "batch_size": self.batch_size,
-            "num_workers": num_workers,
-            "shuffle": True,
-            "collate_fn": collator,
-        }
+    def train_dataloader(self) -> DataLoader:
+        return DataLoader(
+            self.dataset,
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
+            shuffle=True,
+            drop_last=True
+        )
 
-        self.test_dataloader_opts = {
-            "batch_size": self.batch_size,
-            "num_workers": num_workers,
-            "shuffle": False,
-            "collate_fn": collator,
-        }
+    def test_dataloader(self) -> DataLoader:
+        return DataLoader(
+            self.dataset,
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
+            shuffle=False,
+            drop_last=False
+        )
 
-        if train_dataloader_opts is not None:
-            self.train_dataloader_opts.update(train_dataloader_opts)
 
-        if test_dataloader_opts is not None:
-            self.test_dataloader_opts.update(test_dataloader_opts)
+class AnnDataset(Dataset):
+    """Dataset with AnnData.
 
-    def train_dataloader(self) -> AnnLoader:
-        return AnnLoader(self.adata, **self.train_dataloader_opts)
+    Parameters
+    ----------
+    adata : anndata.AnnData or str
+        AnnData object with single cell data
+    batch_key : str, optional
+        Batch variable
+    """
 
-    def test_dataloader(self) -> AnnLoader:
-        return AnnLoader(self.adata, **self.test_dataloader_opts)
+    def __init__(self, adata: ad.AnnData, batch_key: str = 'batch'):
+        adata.obs[batch_key] = adata.obs[batch_key].astype('category')
+        self.adata = adata
+        self.batch_key = batch_key
+
+    def __len__(self):
+        return len(self.adata)
+
+    def __getitem__(self, idx):
+        if isinstance(self.adata.X[idx], np.ndarray):
+            x = self.adata.X[idx].squeeze()
+        else:
+            x = self.adata.X[idx].toarray().squeeze()
+        domain = self.adata.obs[self.batch_key].cat.codes[idx]
+        return x, domain, idx

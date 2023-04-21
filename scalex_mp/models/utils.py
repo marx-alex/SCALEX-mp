@@ -1,14 +1,15 @@
-from typing import Union
+from typing import Union, List
+from itertools import combinations
 
 import torch
 from torch import nn
-from torch.distributions import Normal
+from torch.distributions import Normal, kl_divergence
 
 
 def get_activation_fn(activation: str) -> Union[nn.Module, None]:
     if isinstance(activation, str):
         activation = activation.lower()
-    avail_act = ["tanhshrink", "tanh", "relu", "gelu", "sigmoid", None]
+    avail_act = ["tanhshrink", "tanh", "relu", "gelu", "sigmoid", "identity", None]
     assert (
         activation in avail_act
     ), f"'act' must be one of {avail_act}, instead got {activation}"
@@ -23,12 +24,9 @@ def get_activation_fn(activation: str) -> Union[nn.Module, None]:
         return nn.Tanhshrink()
     elif activation == "sigmoid":
         return nn.Sigmoid()
+    elif activation == "identity":
+        return nn.Identity()
     return None
-
-
-def reparameterize(mu: torch.Tensor, logvar: torch.Tensor, eps: float = 1e-5) -> torch.Tensor:
-    var = torch.exp(logvar) + eps
-    return Normal(mu, var.sqrt()).rsample()
 
 
 class DomainSpecificBatchNorm1d(nn.Module):
@@ -105,3 +103,116 @@ class ArgsSequential(nn.Sequential):
         for module in self:
             x = module(x, *args)
         return x
+
+
+class KLDLoss(nn.Module):
+    """Kullback-Leibler Divergence Loss."""
+
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, mu: torch.Tensor, var: torch.Tensor):
+        """
+        Args:
+            mu: Mean
+            var: Variance
+
+        Returns:
+            Kullback-Leibler Divergence
+        """
+        return kl_divergence(
+            Normal(mu, var.sqrt()),
+            Normal(torch.zeros_like(mu), torch.ones_like(var))
+        ).sum(dim=1).mean()
+
+
+# https://github.com/napsternxg/pytorch-practice/blob/master/Pytorch%20-%20MMD%20VAE.ipynb
+def rbf_kernel(
+    x: torch.Tensor,
+    y: torch.Tensor,
+) -> torch.Tensor:
+    """
+    Compute the Gaussian kernel between two tensors.
+    """
+    x_n, y_n = x.size(0), y.size(0)
+    n_dim = x.size(1)
+    x = x.unsqueeze(1)  # [x_n, 1, n_dim]
+    y = y.unsqueeze(0)  # [1, y_n, n_dim)
+    tiled_x = x.expand(x_n, y_n, n_dim)
+    tiled_y = y.expand(x_n, y_n, n_dim)
+    return torch.exp(-(tiled_x - tiled_y).pow(2).mean(2) / float(n_dim))
+
+
+class MMDLoss(nn.Module):
+    """Maximum Mean Discrepancy Loss."""
+    def __init__(self):
+        super().__init__()
+
+    @staticmethod
+    def _compute_mmd(x, y):
+        x_kernel = rbf_kernel(x, x)
+        y_kernel = rbf_kernel(y, y)
+        xy_kernel = rbf_kernel(x, y)
+        return torch.mean(x_kernel) + torch.mean(y_kernel) - 2 * torch.mean(xy_kernel)
+
+    def forward(self, x: torch.Tensor):
+        """
+        Args:
+            x: Source features in Hilbert space.
+
+        Returns:
+            Maximum mean discrepancy.
+        """
+        loss = self._compute_mmd(torch.randn_like(x), x)
+        return loss
+
+
+class DomainMMDLoss(nn.Module):
+    """Maximum Mean Discrepancy Loss between domains."""
+
+    def __init__(self, num_domains: int, reduction: str = 'sum'):
+        super().__init__()
+
+        self.num_domains = num_domains
+        avail_reductions = ['mean', 'sum']
+        assert reduction in avail_reductions, f"reduction must be one of {avail_reductions}, instead got {reduction}"
+        self.reduction = reduction
+
+    @staticmethod
+    def _partition(x: torch.Tensor, y: torch.Tensor, n_partitions) -> List[torch.Tensor]:
+        partitions = []
+        y = y.flatten()
+
+        for i in range(n_partitions):
+            mask = y == i
+            partitions.append(x[mask, ...])
+
+        return partitions
+
+    @staticmethod
+    def _compute_mmd(x, y):
+        x_kernel = rbf_kernel(x, x)
+        y_kernel = rbf_kernel(y, y)
+        xy_kernel = rbf_kernel(x, y)
+        return torch.mean(x_kernel) + torch.mean(y_kernel) - 2 * torch.mean(xy_kernel)
+
+    def forward(self, x: torch.Tensor, d: torch.Tensor):
+        """
+        Args:
+            x: Source features in Hilbert space.
+            d: Domains
+
+        Returns:
+            Maximum mean discrepancy between kernel embeddings of source and target.
+        """
+        loss = torch.tensor(0.0, device=x.device)
+
+        partitions = self._partition(x, d, self.num_domains)
+        combs = list(combinations(list(range(self.num_domains)), r=2))
+        for i, j in combs:
+            if (partitions[i].shape[0] > 0) & (partitions[j].shape[0] > 0):
+                loss += self._compute_mmd(partitions[i], partitions[j])
+
+        if self.reduction == 'mean':
+            loss = loss / len(combs)
+        return loss

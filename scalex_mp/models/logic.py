@@ -7,7 +7,6 @@ from pytorch_lightning.loggers import WandbLogger
 from tqdm import tqdm
 import numpy as np
 import anndata as ad
-from sklearn.preprocessing import LabelEncoder
 
 from scalex_mp.models import SCALEX
 from scalex_mp.data import AnnDataModule
@@ -32,8 +31,16 @@ class SCALEXLogic:
         Dimensions of hidden layers in the decoder part.
         The length of the sequences it equal to the number of hidden layers.
         The default is `[256, 512]`.
-    kld_beta : float
+    beta : float
         Coefficient for the KLD-Loss
+    beta_norm : bool
+        Normalize KLD-loss beta
+    regul_loss : str
+        Regularization loss. Either 'kld' for Kullback-Leibler Divergence or `mmd` for Maximum Mean Discrepancy.
+    recon_loss : str
+        Reconstruction loss. Either `mse` for Mean Squared Error or `bce` for Binary Cross Entropy.
+        If reconstruction loss is `mse`, identity transform is used for the activation of the last decoder layer.
+        Otherwise the sigmoid function is used. Use `bce` for data scaled between 0 and 1.
     dropout : float
         Dropout rate
     l2 : float
@@ -58,32 +65,24 @@ class SCALEXLogic:
         latent_dim: int = 10,
         encoder_layer_dims: Optional[list] = None,
         decoder_layer_dims: Optional[list] = None,
-        kld_beta: float = 1,
-        dropout: float = 0.1,
-        l2: float = 1e-4,
-        batch_size: int = 32,
+        beta: float = 0.5,
+        beta_norm: bool = True,
+        regul_loss: str = 'kld',
+        recon_loss: str = 'mse',
+        dropout: Optional[float] = None,
+        l2: float = 5e-4,
+        batch_size: int = 64,
         num_workers: int = 4,
-        learning_rate: float = 1e-4,
+        learning_rate: float = 2e-4,
         optimizer: str = "Adam",
         model: Optional[pl.LightningModule] = None
     ):
-        # load data
-        encoder_batch = LabelEncoder()
-        encoder_batch.fit(adata.obs[batch_key])
-
-        encoders = {
-            "obs": {
-                batch_key: encoder_batch.transform,
-            }
-        }
 
         self.data = AnnDataModule(
             adata,
             batch_key=batch_key,
             batch_size=batch_size,
             num_workers=num_workers,
-            train_dataloader_opts=dict(convert=encoders),
-            test_dataloader_opts=dict(convert=encoders),
         )
 
         if model is None:
@@ -93,9 +92,12 @@ class SCALEXLogic:
                 latent_dim=latent_dim,
                 encoder_layer_dims=encoder_layer_dims,
                 decoder_layer_dims=decoder_layer_dims,
+                regul_loss=regul_loss,
+                recon_loss=recon_loss,
                 dropout=dropout,
                 l2=l2,
-                kld_beta=kld_beta,
+                beta=beta,
+                beta_norm=beta_norm,
                 learning_rate=learning_rate,
                 optimizer=optimizer,
             )
@@ -157,7 +159,7 @@ class SCALEXLogic:
         if callbacks is None:
             callbacks = [
                 EarlyStopping(
-                    monitor="loss", min_delta=0.005, patience=50
+                    monitor="loss", min_delta=0.005, patience=10
                 ),
                 ModelCheckpoint(
                     dirpath=logpath,
@@ -179,23 +181,25 @@ class SCALEXLogic:
         if wandb_log:
             logger.experiment.finish()
 
-    def get_latent(self) -> Union[ad.AnnData, dict]:
+    def get_latent(self, return_mean: bool = True) -> Union[ad.AnnData, dict]:
         """Stores latent representation under `.obsm['X_latent']`
 
         Returns
         -------
         anndata.AnnData
         """
-        latent = np.zeros((len(self.data.adata), self.model.hparams.latent_dim))
+        latent = np.zeros((len(self.data.dataset.adata), self.model.hparams.latent_dim))
 
         self.model.eval()
         with torch.no_grad():
             for batch in tqdm(self.data.test_dataloader(), desc="Get latent"):
-                x = batch['x']
-                idx = batch['idx']
-                z = self.model.forward_features(x, return_statistics=False).cpu().detach().numpy()
-                latent[idx, :] = z
+                x, _, idx = batch
+                z, mu, _ = self.model.forward_features(x, return_statistics=True)  # z, mu, var
+                if return_mean:
+                    latent[idx, :] = mu.cpu().detach().numpy()
+                else:
+                    latent[idx, :] = z.cpu().detach().numpy()
         self.model.train()
 
-        self.data.adata.obsm['X_latent'] = latent
-        return self.data.adata
+        self.data.dataset.adata.obsm['X_latent'] = latent
+        return self.data.dataset.adata

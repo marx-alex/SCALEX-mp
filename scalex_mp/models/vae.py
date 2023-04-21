@@ -4,7 +4,7 @@ import torch
 from torch import nn
 import pytorch_lightning as pl
 
-from scalex_mp.models import VAEEncoder, Decoder
+from scalex_mp.models import VAEEncoder, Decoder, KLDLoss, DomainMMDLoss, MMDLoss
 
 
 class SCALEX(pl.LightningModule):
@@ -24,10 +24,14 @@ class SCALEX(pl.LightningModule):
     decoder_layer_dims : list, optional
         Dimensions of hidden layers in the decoder part.
         The length of the sequences it equal to the number of hidden layers.
-    mmd_beta : float
-        Coefficient for the MMD-Loss
-    mmd_beta : float
-        Coefficient for the KLD-Loss
+    beta : float
+        Coefficient for the KLD-loss
+    beta_norm : bool
+        Normalize KLD-loss beta
+    regul_loss : str
+        Regularization loss. Either 'kld' for Kullback-Leibler Divergence or `mmd` for Maximum Mean Discrepancy.
+    recon_loss : str
+        Reconstruction loss. Either `mse` for Mean Squared Error or `bce` for Binary Cross Entropy.
     dropout : float
         Dropout rate
     l2 : float
@@ -45,10 +49,13 @@ class SCALEX(pl.LightningModule):
         latent_dim: int = 10,
         encoder_layer_dims: Optional[List[int]] = None,
         decoder_layer_dims: Optional[List[int]] = None,
-        dropout: float = 0.1,
-        l2: float = 1e-4,
-        kld_beta: float = 1,
-        learning_rate: float = 1e-4,
+        regul_loss: str = 'kld',
+        recon_loss: str = 'mse',
+        dropout: Optional[float] = None,
+        l2: float = 5e-4,
+        beta: float = 0.5,
+        beta_norm: bool = True,
+        learning_rate: float = 2e-4,
         optimizer: str = "Adam",
     ):
         super().__init__()
@@ -56,10 +63,10 @@ class SCALEX(pl.LightningModule):
         self.save_hyperparameters()
 
         if encoder_layer_dims is None:
-            encoder_layer_dims = [512, 256]
+            encoder_layer_dims = [1024]
 
         if decoder_layer_dims is None:
-            decoder_layer_dims = [256, 512]
+            decoder_layer_dims = []
 
         # parts of the VAE
         self.encoder = VAEEncoder(
@@ -73,10 +80,23 @@ class SCALEX(pl.LightningModule):
             n_features=n_features,
             latent_dim=latent_dim,
             layer_dims=decoder_layer_dims,
+            recon_loss=recon_loss,
             dropout=dropout
         )
 
-        self.mse = nn.MSELoss()
+        if recon_loss == 'mse':
+            self.recon_loss_func = nn.MSELoss()
+        elif recon_loss == 'bce':
+            self.recon_loss_func = nn.BCELoss()
+        else:
+            assert False, f'`recon_loss` must be either `mse` or `bce`, instead got {recon_loss}'
+        if regul_loss == 'kld':
+            self.regul_loss_func = KLDLoss()
+        elif regul_loss == 'mmd':
+            self.regul_loss_func = MMDLoss()
+        else:
+            assert False, f'`regul_loss` must be either `kld` or `mmd`, instead got {regul_loss}'
+        self.mmd = DomainMMDLoss(num_domains=n_batches)
 
     def forward_features(self, x: torch.Tensor, return_statistics: bool = False,
     ) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
@@ -88,9 +108,9 @@ class SCALEX(pl.LightningModule):
     def forward(
             self, x: torch.Tensor, d: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-        z, mu, logvar = self.forward_features(x, return_statistics=True)
+        z, mu, var = self.forward_features(x, return_statistics=True)
         x_hat = self.decoder(z, d=d)
-        return z, mu, logvar, x_hat
+        return z, mu, var, x_hat
 
     def training_step(self, batch, batch_idx):
         loss = self._common_step(batch)
@@ -111,23 +131,31 @@ class SCALEX(pl.LightningModule):
         return opt
 
     def _common_step(self, batch):
-        x = batch['x']
-        d = batch['d']
-        self.log('batch_size', x.size()[0])
+        x, d, _ = batch
 
-        z, mu, logvar, x_hat = self(x, d=d)
+        z, mu, var, x_hat = self(x, d=d)
 
         # loss
-        mse = self.mse(x_hat, x)
-        kld = torch.mean(-0.5 * torch.sum(1 + logvar - mu ** 2 - logvar.exp(), dim=1))
+        recon_loss = self.recon_loss_func(x_hat, x)
+        if self.hparams.regul_loss == 'kld':
+            regul_loss = self.regul_loss_func(mu, var)
+        else:
+            regul_loss = self.regul_loss_func(z)
+        mmd = self.mmd(mu, d=d)
 
-        loss = mse + (kld * self.hparams.kld_beta)
+        if self.hparams.beta_norm:
+            beta = (self.hparams.beta * self.hparams.latent_dim) / self.hparams.n_features
+        else:
+            beta = self.hparams.beta
+
+        loss = recon_loss + (regul_loss * beta)
 
         self.log_dict(
             {
                 "loss": loss,
-                "mse": mse,
-                "kld": kld * self.hparams.kld_beta,
+                "recon_loss": recon_loss,
+                "regul_loss": regul_loss * beta,
+                "inter-batch-mmd": mmd
             },
             on_step=True,
             on_epoch=True,

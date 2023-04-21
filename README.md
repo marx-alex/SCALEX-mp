@@ -27,6 +27,7 @@ from scalex_mp import SCALEXLogic
 ```
 Load the AnnData object with morphological profiles (typically normally distributed)
 and initialize the SCALEX procedure.
+The default parameters are set to the parameters from the original publication (see references).
 ```
 adata = ad.read_h5ad('your_file.h5ad')
 
@@ -34,14 +35,14 @@ logic = SCALEXLogic(
     adata=adata,
     batch_key='batch',              # name of observation
     latent_dim=10,                  # number of dimensions of the latent space
-    encoder_layer_dims=[512, 256],  # dimensions of the hidden layers in the encoder
-    decoder_layer_dims=[256, 512],  # dimensions of the hidden layers in the decoder
-    kld_beta=0.001,                 # coefficient of the KLD loss
-    dropout=0.1,                    # dropout rate
-    l2=1e-4,                        # l2 regularization
-    batch_size=32,                  # batch size for training
+    encoder_layer_dims=[1024],      # dimensions of the hidden layers in the encoder
+    decoder_layer_dims=[],          # dimensions of the hidden layers in the decoder
+    kld_beta=0.5,                   # coefficient of the KLD loss
+    dropout=None,                   # dropout rate
+    l2=5e-4,                        # l2 regularization
+    batch_size=64,                  # batch size for training
     num_workers=4,                  # number of workers for training
-    learning_rate=1e-4,             # learning rate for training
+    learning_rate=2e-4,             # learning rate for training
     optimizer="Adam",               # `Adam` or `AdamW` optimizer
 )
 ```

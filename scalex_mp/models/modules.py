@@ -2,8 +2,9 @@ from typing import Tuple, Optional
 
 import torch
 from torch import nn
+from torch.distributions import Normal
 
-from scalex_mp.models import DomainSpecificBatchNorm1d, reparameterize, ArgsSequential, get_activation_fn
+from scalex_mp.models import DomainSpecificBatchNorm1d, ArgsSequential, get_activation_fn
 
 
 class Block(nn.Module):
@@ -164,7 +165,11 @@ class VAEEncoder(Encoder):
     ):
         super().__init__(layer_dims=[n_features] + layer_dims, dropout=dropout)
         self.mu_encoder = nn.Linear(layer_dims[-1], latent_dim)
-        self.logvar_encoder = nn.Linear(layer_dims[-1], latent_dim)
+        self.var_encoder = nn.Linear(layer_dims[-1], latent_dim)
+
+    @staticmethod
+    def reparameterize(mu: torch.Tensor, var: torch.Tensor) -> torch.Tensor:
+        return Normal(mu, var.sqrt()).rsample()
 
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Pass tensor through module.
@@ -176,15 +181,15 @@ class VAEEncoder(Encoder):
         Returns
         -------
         torch.Tensor, torch.Tensor, torch.Tensor
-            Means and log-variances
+            Means and variances
         """
         if self.encode is not None:
             x = self.encode(x)
 
         mu = self.mu_encoder(x)
-        logvar = self.logvar_encoder(x)
-        z = reparameterize(mu, logvar)
-        return z, mu, logvar
+        var = torch.exp(self.var_encoder(x)) + 1e-5
+        z = self.reparameterize(mu, var)
+        return z, mu, var
 
 
 class Decoder(nn.Module):
@@ -200,6 +205,8 @@ class Decoder(nn.Module):
         Number of latent features
     layer_dims : list
         List with dimensions in hidden layers
+    recon_loss : str
+        Reconstruction loss. Either `mse` for Mean Squared Error or `bce` for Binary Cross Entropy.
     dropout : float
         Add dropout layer
     """
@@ -210,10 +217,17 @@ class Decoder(nn.Module):
         n_features: int,
         latent_dim: int,
         layer_dims: list,
+        recon_loss: str = 'mse',
         dropout: float = None,
     ) -> None:
         super().__init__()
-        layer_dims = [latent_dim] + layer_dims
+        layer_dims = [latent_dim] + layer_dims + [n_features]
+        if recon_loss == 'mse':
+            last_layer = 'identity'
+        elif recon_loss == 'bce':
+            last_layer = 'sigmoid'
+        else:
+            assert False, f'`recon_loss` must be either `mse` or `bce`, instead got {recon_loss}'
 
         # dynamically append modules
         self.decode = None
@@ -230,14 +244,13 @@ class Decoder(nn.Module):
                         out_features=out_features,
                         norm='dsbn',
                         n_batches=n_batches,
-                        act='relu',
+                        # gaussian assumption for x_hat
+                        act='relu' if (i + 1) < (len(layer_dims) - 1) else last_layer,
                         dropout=dropout
                     )
                 )
 
             self.decode = ArgsSequential(*self.decode)
-        # gaussian assumption for x_hat
-        self.final_layer = nn.Sequential(nn.Linear(layer_dims[-1], n_features), nn.Identity())
 
     def forward(self, x: torch.Tensor, d: torch.Tensor) -> torch.Tensor:
         """Pass tensor through module.
@@ -255,5 +268,4 @@ class Decoder(nn.Module):
         """
         if self.decode is not None:
             x = self.decode(x, d)
-        x = self.final_layer(x)
         return x
