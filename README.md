@@ -9,10 +9,10 @@ Pytorch Lightning and Weights and Biases for logging.
 The main difference to the published SCALEX model is that the last decoder layer uses 
 an identity transform as activation, because in contrast to count data morphological 
 profiles are expected to be gaussian distributed.
-Mean squared error is therefore used as reconstruction loss. 
+Mean squared error is therefore used for the reconstruction loss. 
 
 All hyperparameters can be individually adapted, including the size and number of
-hidden layers. The reconstruction loss can be also changed to binary cross entropy as it 
+hidden layers. The reconstruction loss can also be changed to binary cross entropy as it 
 is used in the original paper. Instead of the KLD-Loss in the regularization term the 
 Maximum Mean Discrepancy can also be used to get a MMD-VAE.
 
@@ -81,10 +81,10 @@ adata = logic.get_latent()
 
 ### Command Line Interface
 
-There are to scripts that can be used from the command line.
+There are two scripts that can be used from the command line.
 `trainSCALEX` takes an AnnData object and trains a model. The training can be logged with 
 Weights and Biases. `projectSCALEX` takes a pretrained model from a checkpoint file and
-a AnnData object to project the data onto the latent space.
+an AnnData object to project the data onto the latent space.
 
 ```
 >> trainSCALEX -h
