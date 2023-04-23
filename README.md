@@ -28,7 +28,7 @@ Install the latest version from GitHub:
 ### 💾 Logging
 
 All experiments can be logged with Weights and Biases.
-Log in with your credential before training.
+Log in with your credentials before training.
 
 ```
 wandb login

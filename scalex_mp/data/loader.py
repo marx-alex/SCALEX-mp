@@ -30,15 +30,15 @@ class AnnDataModule(pl.LightningDataModule):
     ):
         super().__init__()
 
-        self.batch_size = batch_size
-        self.num_workers = num_workers
-        self.n_features = adata.n_vars
-        self.n_batches = len(adata.obs[batch_key].unique())
-
         # dataset
         if isinstance(adata, str):
             adata = ad.read_h5ad(adata)
         self.dataset = AnnDataset(adata, batch_key=batch_key)
+
+        self.batch_size = batch_size
+        self.num_workers = num_workers
+        self.n_features = adata.n_vars
+        self.n_batches = len(adata.obs[batch_key].unique())
 
     def train_dataloader(self) -> DataLoader:
         return DataLoader(
