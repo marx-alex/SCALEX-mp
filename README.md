@@ -16,7 +16,7 @@ hidden layers. The reconstruction loss can also be changed to binary cross entro
 is used in the original paper. Instead of the KLD-Loss in the regularization term the 
 Maximum Mean Discrepancy can also be used to get a MMD-VAE.
 
-## Installation
+## 💻 Installation
 Install the latest version from GitHub:
 
     git clone git://github.com/marx-alex/SCALEX-mp.git
@@ -25,7 +25,7 @@ Install the latest version from GitHub:
 
 ## Usage
 
-### Logging
+### 💾 Logging
 
 All experiments can be logged with Weights and Biases.
 Log in with your credential before training.
@@ -34,7 +34,7 @@ Log in with your credential before training.
 wandb login
 ```
 
-### Main functions
+### 🚩 Main functions
 
 ```
 import anndata as ad
@@ -155,7 +155,7 @@ optional arguments:
                         Return the mean or a reparameterized sample of the latent space.
 ```
 
-## Reference
+## 📃 Reference
 
     Xiong, L., Tian, K., Li, Y. et al. Online single-cell data integration through projecting heterogeneous 
     datasets into a common cell-embedding space. 
