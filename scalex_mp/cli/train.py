@@ -65,6 +65,7 @@ def main(args=None):
         "--adata",
         type=str,
         help="Path to AnnData object or AnnData object",
+        required=True
     )
     parser.add_argument(
         "--batch_key",
@@ -81,8 +82,6 @@ def main(args=None):
     parser.add_argument(
         "--encoder_layer_dims",
         nargs='*',
-        type=int,
-        default=[1024],
         help="Dimensions of hidden layers in the encoder part. "
              "The length of the sequences it equal to the number of hidden layers. "
              "The default is `[1024]`.",
@@ -90,8 +89,6 @@ def main(args=None):
     parser.add_argument(
         "--decoder_layer_dims",
         nargs='*',
-        type=int,
-        default=[],
         help="Dimensions of hidden layers in the decoder part. "
              "The length of the sequences it equal to the number of hidden layers. The default is `[]`.",
     )

@@ -54,11 +54,13 @@ def main(args=None):
         "--model_path",
         type=str,
         help="Path to the checkpoint file",
+        required=True
     )
     parser.add_argument(
         "--adata",
         type=str,
         help="Path to AnnData object or AnnData object",
+        required=True
     )
     parser.add_argument(
         "--out_dir",
