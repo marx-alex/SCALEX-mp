@@ -1,4 +1,4 @@
-from typing import Optional, Union
+from typing import Optional, List, Union
 
 import torch
 import pytorch_lightning as pl
@@ -26,11 +26,11 @@ class SCALEXLogic:
     encoder_layer_dims : list, optional
         Dimensions of hidden layers in the encoder part.
         The length of the sequences it equal to the number of hidden layers.
-        The default is `[512, 256]`.
+        The default is `[1024]`.
     decoder_layer_dims : list, optional
         Dimensions of hidden layers in the decoder part.
         The length of the sequences it equal to the number of hidden layers.
-        The default is `[256, 512]`.
+        The default is `[]`.
     beta : float
         Coefficient for the KLD-Loss
     beta_norm : bool
@@ -60,13 +60,13 @@ class SCALEXLogic:
 
     def __init__(
         self,
-        adata: ad.AnnData,
+        adata: Union[str, ad.AnnData],
         batch_key: str = 'batch',
         latent_dim: int = 10,
         encoder_layer_dims: Optional[list] = None,
         decoder_layer_dims: Optional[list] = None,
         beta: float = 0.5,
-        beta_norm: bool = True,
+        beta_norm: bool = False,
         regul_loss: str = 'kld',
         recon_loss: str = 'mse',
         dropout: Optional[float] = None,
@@ -113,7 +113,7 @@ class SCALEXLogic:
         checkpoint_path : str
             Path to checkpoint file
         adata : anndata.AnnData or str
-        Path to AnnData object or AnnData object
+            Path to AnnData object or AnnData object
         """
         model = SCALEX.load_from_checkpoint(checkpoint_path=checkpoint_path)
         return cls(adata=adata, model=model, **kwargs)
@@ -121,12 +121,16 @@ class SCALEXLogic:
     def fit(
         self,
         logpath: Optional[str] = None,
-        callbacks: Optional[pl.Callback] = None,
+        callbacks: Optional[Union[List[pl.Callback], pl.Callback]] = None,
         wandb_log: bool = False,
         wandb_kwargs: Optional[dict] = None,
         **kwargs,
     ):
         """Fits the model and creates checkpoint.
+
+        The following default parameters are used:
+        For the trainer: max_epochs=500, log_every_n_steps=1
+        For callbacks: early stopping with patience of 10 and min_delta of 0.005, best loss and last model.
 
         Parameters
         ----------
@@ -154,7 +158,7 @@ class SCALEXLogic:
         else:
             logger = False
 
-        default_trainer_kwargs = dict(max_epochs=1000, log_every_n_steps=1)
+        default_trainer_kwargs = dict(max_epochs=500, log_every_n_steps=1)
 
         if callbacks is None:
             callbacks = [
@@ -183,6 +187,11 @@ class SCALEXLogic:
 
     def get_latent(self, return_mean: bool = True) -> Union[ad.AnnData, dict]:
         """Stores latent representation under `.obsm['X_latent']`
+
+        Parameters
+        ----------
+        return_mean : bool
+            Return the mean or a reparameterized sample of the latent space.
 
         Returns
         -------
