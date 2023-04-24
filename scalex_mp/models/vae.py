@@ -155,12 +155,15 @@ class SCALEX(pl.LightningModule):
 
         loss = recon_loss + regul_loss
 
-        outs = {
-            "loss": loss,
-            "recon_loss": recon_loss,
-            "regul_loss": regul_loss,
-            "inter-batch-mmd": mmd
-            }
-
-        self.log_dict(outs, on_step=True, on_epoch=True, prog_bar=True)
+        self.log_dict(
+            {
+                "loss": loss,
+                "recon_loss": recon_loss,
+                "regul_loss": regul_loss,
+                "inter-batch-mmd": mmd
+            },
+            on_step=True,
+            on_epoch=True,
+            prog_bar=True
+        )
         return loss
