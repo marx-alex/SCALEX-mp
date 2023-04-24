@@ -3,6 +3,7 @@ import logging
 from typing import Optional, Union
 
 from scalex_mp import SCALEXLogic
+from scalex_mp.cli._utils import str_to_bool
 import anndata as ad
 
 logger = logging.getLogger("trainSCALEX")
@@ -101,7 +102,7 @@ def main(args=None):
     )
     parser.add_argument(
         "--beta_norm",
-        type=bool,
+        type=str_to_bool,
         default=False,
         help="Normalize KLD-loss beta",
     )
@@ -169,7 +170,7 @@ def main(args=None):
     )
     parser.add_argument(
         "--wandb_log",
-        type=bool,
+        type=str_to_bool,
         default=True,
         help="Log to Weights and Biases",
     )

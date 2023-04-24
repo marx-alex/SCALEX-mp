@@ -4,7 +4,8 @@ import torch
 from torch import nn
 import pytorch_lightning as pl
 
-from scalex_mp.models import VAEEncoder, Decoder, KLDLoss, DomainMMDLoss, MMDLoss
+from scalex_mp.models._utils import KLDLoss, DomainMMDLoss, MMDLoss
+from scalex_mp.models.modules import VAEEncoder, Decoder
 
 
 class SCALEX(pl.LightningModule):
@@ -98,7 +99,8 @@ class SCALEX(pl.LightningModule):
             assert False, f'`regul_loss` must be either `kld` or `mmd`, instead got {regul_loss}'
         self.mmd = DomainMMDLoss(num_domains=n_batches)
 
-    def forward_features(self, x: torch.Tensor, return_statistics: bool = False,
+    def forward_features(
+            self, x: torch.Tensor, return_statistics: bool = False
     ) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
         z, mu, var = self.encoder(x)
         if return_statistics:
@@ -161,7 +163,8 @@ class SCALEX(pl.LightningModule):
             },
             on_step=True,
             on_epoch=True,
-            prog_bar=True
+            prog_bar=True,
+            sync_dist=True
         )
 
         return loss

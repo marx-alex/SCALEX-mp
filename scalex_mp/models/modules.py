@@ -4,7 +4,7 @@ import torch
 from torch import nn
 from torch.distributions import Normal
 
-from scalex_mp.models import DomainSpecificBatchNorm1d, ArgsSequential, get_activation_fn
+from scalex_mp.models._utils import DomainSpecificBatchNorm1d, ArgsSequential, get_activation_fn
 
 
 class Block(nn.Module):

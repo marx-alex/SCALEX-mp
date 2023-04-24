@@ -4,6 +4,7 @@ import os
 from typing import Union
 
 from scalex_mp import SCALEXLogic
+from scalex_mp.cli._utils import str_to_bool
 import anndata as ad
 
 logger = logging.getLogger("projectSCALEX")
@@ -88,7 +89,7 @@ def main(args=None):
     )
     parser.add_argument(
         "--return_mean",
-        type=bool,
+        type=str_to_bool,
         default=True,
         help="Return the mean or a reparameterized sample of the latent space.",
     )
