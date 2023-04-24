@@ -141,7 +141,9 @@ class SCALEX(pl.LightningModule):
             regul_loss = self.regul_loss_func(mu, var)
         else:
             regul_loss = self.regul_loss_func(z)
-        mmd = self.mmd(mu, d=d)
+
+        with torch.no_grad():
+            mmd = self.mmd(mu, d=d)
 
         if self.hparams.beta_norm:
             beta = (self.hparams.beta * self.hparams.latent_dim) / self.hparams.n_features
