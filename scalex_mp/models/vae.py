@@ -1,4 +1,5 @@
 from typing import Optional, Union, Tuple, List
+from collections import defaultdict
 
 import torch
 from torch import nn
@@ -134,37 +135,32 @@ class SCALEX(pl.LightningModule):
 
     def _common_step(self, batch):
         x, d, _ = batch
-
         z, mu, var, x_hat = self(x, d=d)
 
         # loss
         recon_loss = self.recon_loss_func(x_hat, x)
-        if self.hparams.regul_loss == 'kld':
-            regul_loss = self.regul_loss_func(mu, var)
-        else:
-            regul_loss = self.regul_loss_func(z)
-
-        with torch.no_grad():
-            mmd = self.mmd(mu, d=d)
 
         if self.hparams.beta_norm:
             beta = (self.hparams.beta * self.hparams.latent_dim) / self.hparams.n_features
         else:
             beta = self.hparams.beta
 
-        loss = recon_loss + (regul_loss * beta)
+        if self.hparams.regul_loss == 'kld':
+            regul_loss = self.regul_loss_func(mu, var) * beta
+        else:
+            regul_loss = self.regul_loss_func(z) * beta
 
-        self.log_dict(
-            {
-                "loss": loss,
-                "recon_loss": recon_loss,
-                "regul_loss": regul_loss * beta,
-                "inter-batch-mmd": mmd
-            },
-            on_step=True,
-            on_epoch=True,
-            prog_bar=True,
-            sync_dist=True
-        )
+        with torch.no_grad():
+            mmd = self.mmd(mu, d=d)
 
+        loss = recon_loss + regul_loss
+
+        outs = {
+            "loss": loss,
+            "recon_loss": recon_loss,
+            "regul_loss": regul_loss,
+            "inter-batch-mmd": mmd
+            }
+
+        self.log_dict(outs, on_step=True, on_epoch=True, prog_bar=True)
         return loss

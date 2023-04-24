@@ -28,6 +28,7 @@ def run(
     learning_rate: float = 2e-4,
     optimizer: str = "Adam",
     max_epochs: int = 100,
+    devices: Union[int, str] = 'auto',
     num_nodes: int = 1,
     wandb_log: bool = True
 ):
@@ -52,7 +53,7 @@ def run(
         learning_rate=learning_rate,
         optimizer=optimizer
     )
-    logic.fit(max_epochs=max_epochs, num_nodes=num_nodes, wandb_log=wandb_log)
+    logic.fit(max_epochs=max_epochs, num_nodes=num_nodes, devices=devices, wandb_log=wandb_log)
 
 
 def main(args=None):
@@ -163,6 +164,11 @@ def main(args=None):
         help="Maximum number of epochs",
     )
     parser.add_argument(
+        "--devices",
+        type=int,
+        help="Devices per node",
+    )
+    parser.add_argument(
         "--num_nodes",
         type=int,
         default=1,
@@ -196,6 +202,7 @@ def main(args=None):
         learning_rate=args.learning_rate,
         optimizer=args.optimizer,
         max_epochs=args.max_epochs,
+        devices=args.devices if args.devices is not None else 'auto',
         num_nodes=args.num_nodes,
         wandb_log=args.wandb_log
     )
