@@ -158,8 +158,6 @@ class SCALEXLogic:
         else:
             logger = False
 
-        default_trainer_kwargs = dict(max_epochs=500, log_every_n_steps=1)
-
         if callbacks is None:
             callbacks = [
                 EarlyStopping(
@@ -176,10 +174,7 @@ class SCALEXLogic:
                 )
             ]
 
-        default_trainer_kwargs.update(dict(logger=logger, callbacks=callbacks))
-        default_trainer_kwargs.update(kwargs)
-
-        trainer = pl.Trainer(**default_trainer_kwargs)
+        trainer = pl.Trainer(logger=logger, callbacks=callbacks, **kwargs)
         trainer.fit(self.model, self.data)
 
         if wandb_log:

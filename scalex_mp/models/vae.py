@@ -1,5 +1,4 @@
 from typing import Optional, Union, Tuple, List
-from collections import defaultdict
 
 import torch
 from torch import nn
