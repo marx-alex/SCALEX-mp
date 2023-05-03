@@ -99,6 +99,12 @@ class SCALEX(pl.LightningModule):
             assert False, f'`regul_loss` must be either `kld` or `mmd`, instead got {regul_loss}'
         self.mmd = DomainMMDLoss(num_domains=n_batches)
 
+        # assign beta
+        if beta_norm:
+            self.beta = (beta * latent_dim) / n_features
+        else:
+            self.beta = beta
+
     def forward_features(
             self, x: torch.Tensor, return_statistics: bool = False
     ) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
@@ -139,20 +145,15 @@ class SCALEX(pl.LightningModule):
         # loss
         recon_loss = self.recon_loss_func(x_hat, x)
 
-        if self.hparams.beta_norm:
-            beta = (self.hparams.beta * self.hparams.latent_dim) / self.hparams.n_features
-        else:
-            beta = self.hparams.beta
-
         if self.hparams.regul_loss == 'kld':
-            regul_loss = self.regul_loss_func(mu, var) * beta
+            regul_loss = self.regul_loss_func(mu, var)
         else:
-            regul_loss = self.regul_loss_func(z) * beta
+            regul_loss = self.regul_loss_func(z)
 
         with torch.no_grad():
             mmd = self.mmd(mu, d=d)
 
-        loss = recon_loss + regul_loss
+        loss = recon_loss + (self.beta * regul_loss)
 
         self.log_dict(
             {
