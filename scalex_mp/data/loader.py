@@ -39,6 +39,7 @@ class AnnDataModule(pl.LightningDataModule):
         self.num_workers = num_workers
         self.n_features = adata.n_vars
         self.n_batches = len(adata.obs[batch_key].unique())
+        self.batch_key = batch_key
 
     def train_dataloader(self) -> DataLoader:
         return DataLoader(

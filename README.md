@@ -4,7 +4,7 @@ SCALEX-mp
 SCALEX is a Variational Autoencoder for the integration of single cell data from different batches.
 It was originally designed for single cell sequencing data. SCALEX-mp is an adaption
 for morphological (image-based) profiles. This implementation is based on
-Pytorch Lightning and Weights and Biases for logging.
+Pytorch Lightning ⚡ and Weights and Biases for logging.
 
 The main difference to the published SCALEX model is that the last decoder layer uses 
 an identity transform as activation, because in contrast to count data morphological 

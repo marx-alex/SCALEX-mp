@@ -7,6 +7,8 @@ from pytorch_lightning.loggers import WandbLogger
 from tqdm import tqdm
 import numpy as np
 import anndata as ad
+import scanpy as sc
+import wandb
 
 from scalex_mp.models import SCALEX
 from scalex_mp.data import AnnDataModule
@@ -122,6 +124,9 @@ class SCALEXLogic:
         self,
         logpath: Optional[str] = None,
         callbacks: Optional[Union[List[pl.Callback], pl.Callback]] = None,
+        log_domain_scatter: bool = False,
+        log_domain_scatter_keys: Optional[Union[str, List[str]]] = None,
+        log_domain_scatter_max_samples: int = 50000,
         wandb_log: bool = False,
         wandb_kwargs: Optional[dict] = None,
         **kwargs,
@@ -139,6 +144,13 @@ class SCALEXLogic:
         callbacks : list
             List of pytorch lightning callbacks.
             The model with the best loss and the last model is saved by default.
+        log_domain_scatter : bool
+            Log an UMAP-scatterplot with the domains before training using a PCA representation and after training
+            using the learned latent representation
+        log_domain_scatter_keys : list
+            Change the keys to show in the domain scatter plot before and after training
+        log_domain_scatter_max_samples : int
+            Maximum number of samples to use for the scatterplot
         wandb_log : bool
             Use WandB-Logger
         wandb_kwargs : dict
@@ -155,6 +167,14 @@ class SCALEXLogic:
                 default_wandb_kwargs.update(wandb_kwargs)
 
             logger = WandbLogger(**default_wandb_kwargs)
+
+            if log_domain_scatter:
+                self._log_domain_scatter(
+                    self.data.dataset.adata,
+                    log_keys=log_domain_scatter_keys,
+                    append_log_name="_before_training",
+                    max_samples=log_domain_scatter_max_samples
+                )
         else:
             logger = False
 
@@ -178,6 +198,14 @@ class SCALEXLogic:
         trainer.fit(self.model, self.data)
 
         if wandb_log:
+            if log_domain_scatter:
+                self._log_domain_scatter(
+                    self.get_latent(),
+                    rep='X_latent',
+                    log_keys=log_domain_scatter_keys,
+                    append_log_name="_after_training",
+                    max_samples=log_domain_scatter_max_samples
+                )
             logger.experiment.finish()
 
     def get_latent(self, return_mean: bool = True) -> Union[ad.AnnData, dict]:
@@ -207,3 +235,33 @@ class SCALEXLogic:
 
         self.data.dataset.adata.obsm['X_latent'] = latent
         return self.data.dataset.adata
+
+    def _log_domain_scatter(
+            self,
+            adata: ad.AnnData,
+            log_keys: Optional[Union[str, List[str]]] = None,
+            rep: Optional[str] = None,
+            max_samples: int = 50000,
+            append_log_name: Optional[str] = None
+    ):
+        n_obs = min(max_samples, len(adata))
+        subsample = sc.pp.subsample(adata, n_obs=n_obs, copy=True)
+        if rep is None:
+            sc.pp.pca(subsample, n_comps=self.model.hparams.latent_dim)
+            rep = 'X_pca'
+
+        sc.pp.neighbors(subsample, use_rep=rep)
+        sc.tl.umap(subsample)
+
+        if log_keys is None:
+            log_keys = self.data.batch_key
+        if not isinstance(log_keys, list):
+            log_keys = [log_keys]
+
+        for log_key in log_keys:
+            fig = sc.pl.umap(subsample, color=log_key, frameon=False, return_fig=True)
+            if append_log_name is not None:
+                chart_name = log_key + append_log_name
+            else:
+                chart_name = log_key
+            wandb.log({chart_name: wandb.Image(fig)})
