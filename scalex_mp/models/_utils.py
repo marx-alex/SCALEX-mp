@@ -170,7 +170,7 @@ class MMDLoss(nn.Module):
 class DomainMMDLoss(nn.Module):
     """Maximum Mean Discrepancy Loss between domains."""
 
-    def __init__(self, num_domains: int, reduction: str = 'sum'):
+    def __init__(self, num_domains: int, reduction: str = 'mean'):
         super().__init__()
 
         self.num_domains = num_domains
@@ -208,11 +208,74 @@ class DomainMMDLoss(nn.Module):
         loss = torch.tensor(0.0, device=x.device)
 
         partitions = self._partition(x, d, self.num_domains)
+        partitions = [partition for partition in partitions if partition.shape[0] > 0]
         combs = list(combinations(list(range(self.num_domains)), r=2))
         for i, j in combs:
-            if (partitions[i].shape[0] > 0) & (partitions[j].shape[0] > 0):
-                loss += self._compute_mmd(partitions[i], partitions[j])
+            loss += self._compute_mmd(partitions[i], partitions[j])
 
         if self.reduction == 'mean':
-            loss = loss / len(combs)
+            if len(combs) > 0:
+                loss = loss / len(combs)
+        return loss
+
+
+class MultiCoralLoss(nn.Module):
+    """Coral Loss for two or more domains.
+
+    References
+    ----------
+    [1] https://arxiv.org/pdf/1607.01719.pdf
+    """
+
+    def __init__(self, num_domains: int, reduction: str = 'mean'):
+        super().__init__()
+
+        self.num_domains = num_domains
+        avail_reductions = ['mean', 'sum']
+        assert reduction in avail_reductions, f"reduction must be one of {avail_reductions}, instead got {reduction}"
+        self.reduction = reduction
+
+    @staticmethod
+    def _partition(x: torch.Tensor, y: torch.Tensor, n_partitions) -> List[torch.Tensor]:
+        partitions = []
+        y = y.flatten()
+
+        for i in range(n_partitions):
+            mask = y == i
+            partitions.append(x[mask, ...])
+
+        return partitions
+
+    @staticmethod
+    def _compute_coral(source: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+
+        n_features = source.size(1)
+
+        source_cov = torch.cov(source.T)
+        target_cov = torch.cov(target.T)
+
+        squared_frob = torch.sum((source_cov - target_cov)**2)
+
+        return squared_frob / (4 * n_features * n_features)
+
+    def forward(self, x: torch.Tensor, d: torch.Tensor):
+        """
+        Args:
+            x: Source features in Hilbert space.
+            d: Domains
+
+        Returns:
+            Maximum mean discrepancy between kernel embeddings of source and target.
+        """
+        loss = torch.tensor(0.0, device=x.device)
+
+        partitions = self._partition(x, d, self.num_domains)
+        partitions = [partition for partition in partitions if partition.shape[0] > 0]
+        combs = list(combinations(list(range(self.num_domains)), r=2))
+        for i, j in combs:
+            loss += self._compute_coral(partitions[i], partitions[j])
+
+        if self.reduction == 'mean':
+            if len(combs) > 0:
+                loss = loss / len(combs)
         return loss

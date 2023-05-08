@@ -4,7 +4,7 @@ import torch
 from torch import nn
 import pytorch_lightning as pl
 
-from scalex_mp.models._utils import KLDLoss, DomainMMDLoss, MMDLoss
+from scalex_mp.models._utils import KLDLoss, DomainMMDLoss, MMDLoss, MultiCoralLoss
 from scalex_mp.models.modules import VAEEncoder, Decoder
 
 
@@ -98,6 +98,7 @@ class SCALEX(pl.LightningModule):
         else:
             assert False, f'`regul_loss` must be either `kld` or `mmd`, instead got {regul_loss}'
         self.mmd = DomainMMDLoss(num_domains=n_batches)
+        self.coral = MultiCoralLoss(num_domains=n_batches)
 
         # assign beta
         if beta_norm:
@@ -151,7 +152,8 @@ class SCALEX(pl.LightningModule):
             regul_loss = self.regul_loss_func(z)
 
         with torch.no_grad():
-            mmd = self.mmd(mu, d=d)
+            mmd = self.mmd(z, d=d)
+            coral = self.coral(z, d=d)
 
         loss = recon_loss + (self.beta * regul_loss)
 
@@ -160,7 +162,8 @@ class SCALEX(pl.LightningModule):
                 "loss": loss,
                 "recon_loss": recon_loss,
                 "regul_loss": regul_loss,
-                "inter-batch-mmd": mmd
+                "inter-batch-mmd": mmd,
+                "inter-batch-coral": coral
             },
             on_step=True,
             on_epoch=True,
