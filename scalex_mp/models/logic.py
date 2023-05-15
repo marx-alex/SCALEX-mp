@@ -127,6 +127,7 @@ class SCALEXLogic:
         log_domain_scatter: bool = False,
         log_domain_scatter_keys: Optional[Union[str, List[str]]] = None,
         log_domain_scatter_max_samples: int = 50000,
+        log_domain_scatter_mean: bool = True,
         wandb_log: bool = False,
         wandb_kwargs: Optional[dict] = None,
         **kwargs,
@@ -151,6 +152,8 @@ class SCALEXLogic:
             Change the keys to show in the domain scatter plot before and after training
         log_domain_scatter_max_samples : int
             Maximum number of samples to use for the scatterplot
+        log_domain_scatter_mean : bool
+            Log the mean or a reparameterized sample of the latent space.
         wandb_log : bool
             Use WandB-Logger
         wandb_kwargs : dict
@@ -200,7 +203,7 @@ class SCALEXLogic:
         if wandb_log:
             if log_domain_scatter:
                 self._log_domain_scatter(
-                    self.get_latent(),
+                    self.get_latent(return_mean=log_domain_scatter_mean),
                     rep='X_latent',
                     log_keys=log_domain_scatter_keys,
                     append_log_name="_after_training",
