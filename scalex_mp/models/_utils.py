@@ -209,13 +209,17 @@ class DomainMMDLoss(nn.Module):
 
         partitions = self._partition(x, d, self.num_domains)
         partitions = [partition for partition in partitions if partition.shape[0] > 0]
-        combs = list(combinations(list(range(self.num_domains)), r=2))
-        for i, j in combs:
-            loss += self._compute_mmd(partitions[i], partitions[j])
+        n_partitions = len(partitions)
 
-        if self.reduction == 'mean':
-            if len(combs) > 0:
-                loss = loss / len(combs)
+        if n_partitions >= 2:
+            combs = list(combinations(list(range(n_partitions)), r=2))
+            for i, j in combs:
+                loss += self._compute_mmd(partitions[i], partitions[j])
+
+            if self.reduction == 'mean':
+                if len(combs) > 0:
+                    loss = loss / len(combs)
+
         return loss
 
 
@@ -271,11 +275,15 @@ class MultiCoralLoss(nn.Module):
 
         partitions = self._partition(x, d, self.num_domains)
         partitions = [partition for partition in partitions if partition.shape[0] > 0]
-        combs = list(combinations(list(range(self.num_domains)), r=2))
-        for i, j in combs:
-            loss += self._compute_coral(partitions[i], partitions[j])
+        n_partitions = len(partitions)
 
-        if self.reduction == 'mean':
-            if len(combs) > 0:
-                loss = loss / len(combs)
+        if n_partitions >= 2:
+            combs = list(combinations(list(range(n_partitions)), r=2))
+            for i, j in combs:
+                loss += self._compute_coral(partitions[i], partitions[j])
+
+            if self.reduction == 'mean':
+                if len(combs) > 0:
+                    loss = loss / len(combs)
+
         return loss
