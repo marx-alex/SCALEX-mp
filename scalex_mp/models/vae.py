@@ -125,10 +125,6 @@ class SCALEX(pl.LightningModule):
         loss = self._common_step(batch)
         return loss
 
-    def test_step(self, batch, batch_idx):
-        loss = self._common_step(batch)
-        return loss
-
     def configure_optimizers(self):
         if self.hparams.optimizer == "Adam":
             opt = torch.optim.Adam(self.parameters(), lr=self.hparams.learning_rate, weight_decay=self.hparams.l2)

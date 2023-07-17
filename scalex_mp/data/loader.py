@@ -84,5 +84,7 @@ class AnnDataset(Dataset):
             x = self.adata.X[idx].squeeze()
         else:
             x = self.adata.X[idx].toarray().squeeze()
+        # float32 precision is required by the linear layer
+        x = x.astype('float32')
         domain = self.adata.obs[self.batch_key].cat.codes[idx]
         return x, domain, idx
